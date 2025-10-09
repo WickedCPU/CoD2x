@@ -97,6 +97,7 @@ void hook_Com_Frame()
     freeze_frame();
     updater_frame();
     hwid_frame();
+    window_frame();
     gsc_frame();
     match_frame();
     registry_frame();      // called as last so other modules can handle version changes
@@ -132,7 +133,7 @@ int hook_gfxDll() {
     // Patch gfx_d3d_mp_x86_s.dll
     ///////////////////////////////////////////////////////////////////
 
-    window_hook_rendered();
+    window_rendered();
     updater_renderer();
 
     // Fix LOD

@@ -54,6 +54,7 @@ int minWidth = 0;
 int minHeight = 0;
 
 bool in_menu_last = true;
+int window_clientStateLast = -1;
 
 // Global state for gamma handling.
 static HDC gamma_currentDC = NULL;
@@ -674,8 +675,21 @@ int R_CreateWindow()
 
 
 
+
+/** Called every frame at the start of the frame. */
+void window_frame() {
+
+    // Player disconnected from the server
+    if (clientState != window_clientStateLast && clientState == CLIENT_STATE_CONNECTED) {
+        Dvar_SetBool(m_enable, true); // enable mouse movement
+    }
+
+    window_clientStateLast = clientState;
+}
+
+
 // Called when the game loaded the renderer DLL
-void window_hook_rendered() {
+void window_rendered() {
 
     // Patch the function that creates the window
     patch_call(gfx_module_addr + 0x00012d69, (unsigned int)R_CreateWindow);
