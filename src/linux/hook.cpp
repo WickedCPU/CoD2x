@@ -48,6 +48,7 @@ void hook_SV_Init() {
     game_init();
     animation_init();
     match_init();
+    iwd_init();
 
     ASM_CALL(RETURN_VOID, 0x08093adc);
 }

@@ -215,6 +215,7 @@ void hook_SV_Init() {
     game_init();
     animation_init();
     match_init();
+    iwd_init();
 
     if (!DLL_HOTRELOAD) {
         ASM_CALL(RETURN_VOID, 0x004596d0);

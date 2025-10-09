@@ -47,6 +47,7 @@ extern "C" {
 #define NUM_IW_COD2X_IWDS 1 // New CoD2x iwds
 
 extern dvar_t* g_cod2x;
+dvar_t* com_writeConfig = NULL;
 
 
 /**
@@ -532,6 +533,27 @@ void FS_BuildOSPath_Internal_FS_Read(const char* game, char* qpath, char* ospath
 
 
 
+bool com_writeConfigLastValue = false;
+
+void Com_WriteConfigToFile() {
+    char* filename; ASM( movr, filename, "eax" );
+
+    // Use flag to disable writing into config after we write the cvar change itself
+    if (com_writeConfig && !com_writeConfig->value.boolean) {
+        if (com_writeConfigLastValue == false)
+            return;
+        com_writeConfigLastValue = false;
+    } else {
+        com_writeConfigLastValue = true;
+    }
+
+    ASM_CALL(RETURN_VOID, 0x00434a90, 0, EAX(filename));
+}
+
+
+
+
+
 // This function is called in FS_Startup after registering the original paths, we add new one from movie
 void FS_AddCommands() {
 
@@ -585,6 +607,12 @@ void iwd_frame() {
 }
 
 
+/** Called only once on game start after common inicialization. Used to initialize variables, cvars, etc. */
+void iwd_init() {
+    com_writeConfig = Dvar_RegisterBool("com_writeConfig", true, DVAR_ARCHIVE);
+}
+
+
 /** Called before the entry point is called. Used to patch the memory. */
 void iwd_patch() {
     patch_call(ADDR(0x00425284, 0x080a2dfc), (unsigned int)&FS_RegisterDvars);
@@ -605,5 +633,7 @@ void iwd_patch() {
     patch_call(0x004229db, (unsigned int)FS_BuildOSPath_Internal_FS_Read); // FS_BuildOSPath_Internal in FS_FOpenFileRead
     patch_call(0x004227ec, (unsigned int)FS_BuildOSPath_Internal_FS_Read); // FS_BuildOSPath_Internal in FS_FOpenFileRead
     patch_call(0x0042572f, (unsigned int)FS_AddCommands); // in FS_Startup
+
+    patch_call(0x00434b6a, (unsigned int)Com_WriteConfigToFile); // in Com_WriteConfigOnChange
     #endif
 }
