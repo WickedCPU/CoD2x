@@ -4,7 +4,10 @@
 #include "cod2_script.h"
 
 extern int codecallback_test_onStartGameType;
+extern int codecallback_test_onStartGameType2;
+extern int codecallback_test_onStartGameType3;
 extern int codecallback_test_onPlayerConnect;
+extern int codecallback_test_onPlayerConnect2;
 
 void gsc_test_playerGetName(scr_entref_t ref);
 

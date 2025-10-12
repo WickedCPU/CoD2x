@@ -10,7 +10,10 @@
 
 
 int codecallback_test_onStartGameType = 0;
+int codecallback_test_onStartGameType2 = 0;
+int codecallback_test_onStartGameType3 = 0;
 int codecallback_test_onPlayerConnect = 0;
+int codecallback_test_onPlayerConnect2 = 0;
 
 #if DEBUG
 
@@ -114,6 +117,20 @@ void gsc_test_onPlayerConnect(int entnum) {
 			unsigned short thread_id = Scr_ExecEntThreadNum(g_entities[entnum].s.number, 0, codecallback_test_onPlayerConnect, 0);
 			Scr_FreeThread(thread_id);
 		}
+		if (codecallback_test_onPlayerConnect2 && Scr_IsSystemActive())
+		{
+			Scr_AddString("hello from CoD2x");
+			Scr_AddExecEntThreadNum(g_entities[entnum].s.number, 0, codecallback_test_onPlayerConnect2, 1);
+
+			const char* typeName = Scr_GetTypeName(0);
+			if (typeName == NULL || strcmp(typeName, "int") != 0) {
+				Com_Error(ERR_DROP, "gsc_test_onPlayerConnect: expected type of return value to be 'int', got '%s'", typeName ? typeName : "NULL");
+			}
+			int i = Scr_GetInt(0);
+			if (i != 1338) {
+				Com_Error(ERR_DROP, "gsc_test_onPlayerConnect: expected return value to be 1338, got %d", i);
+			}
+		}
 	#endif
 }
 
@@ -124,6 +141,30 @@ void gsc_test_onStartGameType() {
 			Scr_AddString("hello from CoD2x");
 			unsigned short thread_id = Scr_ExecThread(codecallback_test_onStartGameType, 1);
 			Scr_FreeThread(thread_id);
+		}
+		if (codecallback_test_onStartGameType2 && Scr_IsSystemActive())
+		{
+			Scr_AddString("hello from CoD2x");
+			
+			Scr_AddExecThread(codecallback_test_onStartGameType2, 1);
+
+			const char* typeName = Scr_GetTypeName(0);
+			if (typeName == NULL || strcmp(typeName, "int") != 0) {
+				Com_Error(ERR_DROP, "gsc_test_onStartGameType: expected type of return value to be 'int', got '%s'", typeName ? typeName : "NULL");
+			}
+			int i = Scr_GetInt(0);
+			if (i != 1337) {
+				Com_Error(ERR_DROP, "gsc_test_onStartGameType: expected return value to be 1337, got %d", i);
+			}
+		}
+		if (codecallback_test_onStartGameType3 && Scr_IsSystemActive())
+		{
+			Scr_AddExecThread(codecallback_test_onStartGameType3, 0);
+
+			const char* typeName = Scr_GetTypeName(0);
+			if (typeName == NULL || strcmp(typeName, "undefined") != 0) {
+				Com_Error(ERR_DROP, "gsc_test_onStartGameType: expected type of return value to be 'undefined', got '%s'", typeName ? typeName : "NULL");
+			}
 		}
 	#endif
 }

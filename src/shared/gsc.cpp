@@ -75,7 +75,10 @@ callback_t callbacks[] =
 {
 	#if DEBUG
 	{ &codecallback_test_onStartGameType, 			"_callback_tests", "callback_test_onStartGameType", true},
+	{ &codecallback_test_onStartGameType2, 			"_callback_tests", "callback_test_onStartGameType2", true},
+	{ &codecallback_test_onStartGameType3, 			"_callback_tests", "callback_test_onStartGameType3", true},
 	{ &codecallback_test_onPlayerConnect, 			"_callback_tests", "callback_test_onPlayerConnect", true},
+	{ &codecallback_test_onPlayerConnect2, 			"_callback_tests", "callback_test_onPlayerConnect2", true},
 
 	{ &codecallback_test_match_onStartGameType, 	"_callback_match", "callback_match_onStartGameType", true},
 	{ &codecallback_test_match_onPlayerConnect, 	"_callback_match", "callback_match_onPlayerConnect", true},

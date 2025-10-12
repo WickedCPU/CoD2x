@@ -70,19 +70,33 @@ inline unsigned int Scr_GetNumParam()
 }
 
 // Executes a script immediately until wait command is called.
-inline unsigned short Scr_ExecThread(int callbackHook, unsigned int numArgs)
-{
+// Scr_FreeThread must be called to free the thread after it's done.
+inline unsigned short Scr_ExecThread(int callbackHook, unsigned int numArgs) {
 	unsigned short ret;
 	ASM_CALL(RETURN_SHORT(ret), ADDR(0x00482080, 0x08083FD6), WL(1, 2), WL(EAX, PUSH)(callbackHook), PUSH(numArgs));
 	return ret;
 }
 
 // Executes a script immediately for an entity, use classnum 0
+// Scr_FreeThread must be called to free the thread after it's done.
 inline unsigned short Scr_ExecEntThreadNum(int entnum, int classnum, int handle, unsigned int paramcount) {
 	unsigned short ret;
 	ASM_CALL(RETURN_SHORT(ret), ADDR(0x00482190, 0x08084062), WL(3, 4), PUSH(entnum), PUSH(classnum), WL(EAX, PUSH)(handle), PUSH(paramcount));
 	return ret;
 }
+
+// Executes a script immediately until wait command is called.
+// Return value can be read.
+inline void Scr_AddExecThread(int callbackHook, unsigned int numArgs){
+	ASM_CALL(RETURN_VOID, ADDR(0x004822a0, 0x080840f4), WL(1, 2), WL(EAX, PUSH)(callbackHook), PUSH(numArgs));
+}
+
+// Executes a script immediately for an entity, use classnum 0
+// Return value can be read.
+inline void Scr_AddExecEntThreadNum(int entnum, int classnum, int handle, unsigned int paramcount) {
+	ASM_CALL(RETURN_VOID, ADDR(0x00482360, 0x0808415c), WL(3, 4), PUSH(entnum), PUSH(classnum), WL(EAX, PUSH)(handle), PUSH(paramcount));
+}
+
 
 inline void Scr_FreeThread(unsigned short thread_id)
 {
@@ -187,7 +201,13 @@ inline void* Scr_GetParamFunction(int param)
 	ASM_CALL(RETURN(ret), ADDR(0x004831f0, 0x08084dd0), WL(0, 1), WL(EAX, PUSH)(param));
 	return ret;
 }
-
+// Get type name of passed parameter at index, e.g "undefined", "int", "float", "string", ""localized string", "vector", "array", etc
+inline char* Scr_GetTypeName(int param)
+{
+	char* ret;
+	ASM_CALL(RETURN(ret), ADDR(0x00483440, 0x08085040), WL(0, 1), WL(EAX, PUSH)(param));
+	return ret;
+}
 
 
 inline char* SL_ConvertToString(int index)

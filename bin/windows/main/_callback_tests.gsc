@@ -29,8 +29,20 @@ callback_test_onStartGameType(p1) {
     varstring = "variable test " + "string";
     test_getAll(true, 1, 2.222, varstring, &"Localized text string", (1, 2, 3), ::print_ok);
 
+    level thread otherTests();
+}
 
-    wait 1;
+callback_test_onStartGameType2(p1) {
+    assertEx(p1 == "hello from CoD2x", "test_func should receive 'hello from CoD2x', got " + p1);
+    return 1337;
+}
+
+callback_test_onStartGameType3() {
+    // no return
+}
+
+otherTests() {
+    //wait 1;
 
 
     /****************************************************************************************************************************************************
@@ -65,11 +77,21 @@ print_ok() {
 
 
 callback_test_onPlayerConnect() {
-    self endon("disconnect");
 
     println("=====================");
     println("Script: Player connecting: " + self.name);
     println("=====================");
+
+    self thread playerConnect();
+}
+
+callback_test_onPlayerConnect2(p1) {
+    assertEx(p1 == "hello from CoD2x", "callback_test_onPlayerConnect2 should receive 'hello from CoD2x', got " + p1);
+    return 1338;
+}
+
+playerConnect() {
+    self endon("disconnect");
 
     self waittill("begin");
 
