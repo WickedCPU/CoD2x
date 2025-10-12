@@ -899,10 +899,10 @@ bool server_beforeMapChangeOrRestart(bool isShutdown, sv_map_change_source_e sou
 	bool fromScript = level_finished > 0; // 1=map_restart(), 2=map(), 3=exitLevel()
 	bool bComplete = !level_savePersist;  // set from GSC when calling exitLevel() or map_restart()
 
-	if (!gsc_match_beforeMapChangeOrRestart(fromScript, bComplete, isShutdown, source)) return false; // must be called first, because it can block the map change/restart
+	if (!gsc_beforeMapChangeOrRestart(fromScript, bComplete, isShutdown, source)) return false;	// must be called first, because mod can block the map change/restart
+	if (!gsc_match_beforeMapChangeOrRestart(fromScript, bComplete, isShutdown, source)) return false;
 	if (!gsc_http_beforeMapChangeOrRestart(fromScript, bComplete, isShutdown, source)) return false;
 	if (!gsc_websocket_beforeMapChangeOrRestart(fromScript, bComplete, isShutdown, source)) return false;
-	if (!gsc_beforeMapChangeOrRestart(fromScript, bComplete, isShutdown, source)) return false;	
 	if (!match_beforeMapChangeOrRestart(fromScript, bComplete, isShutdown, source)) return false;
 
 	return true;

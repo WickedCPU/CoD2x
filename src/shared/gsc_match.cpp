@@ -419,13 +419,6 @@ void gsc_match_isActivated() {
  * @param source the source of the map change or restart.
  */
 bool gsc_match_beforeMapChangeOrRestart(bool fromScript, bool bComplete, bool shutdown, sv_map_change_source_e source) {
-
-	// TODO Temporarly allow match change untill we handle teams map order
-	/*if (match.activated && !match.allow_map_change && fromScript == false && shutdown == false) {
-		Com_Printf("Cannot change / restart map while in a match\nRun \"/match cancel\" to end the match\n");
-		return false; // prevent map change
-	}*/
-	match.allow_map_change = false;
 	
 	#if DEBUG
 		if (codecallback_test_match_onStopGameType && Scr_IsSystemActive())

@@ -14,6 +14,8 @@
 
 dvar_t *match_login; // Cvar to store match login hash
 Match match;
+extern bool gsc_allowOneTimeLevelChange;
+
 
 // TODO secure vypsani uuid, aby neslo zneuzit
 std::string match_create_json_data()
@@ -443,10 +445,10 @@ void match_cmd() {
         match.uploading = false;
         match.uploadingError = false;
         match.canceling = false;
+        match.cancelReason[0] = '\0';
         match.httpClient = new HttpClient();
         match.start_time = time_utc_ms();
         match.start_tick = ticks_ms();
-        match.allow_map_change = false;
         match.progressData.globalData.clear();
         match.progressData.playerData.clear();
 
@@ -646,6 +648,10 @@ bool match_beforeMapChangeOrRestart(bool fromScript, bool bComplete, bool shutdo
     // GSC script had time to complete the score and upload the final results, so we just cancel
     if (match.canceling || shutdown) {
 
+        if (match.canceling && match.cancelReason[0] != '\0') {
+            match_upload_error("Match canceled", match.cancelReason);
+        }
+
         if (shutdown && (match.uploading || match.uploadingError)) {
             // Since server is shutting down, Com_Frame is not called, so we need to poll here to process the pending match data upload
             for(int i = 0; i < 10 && (match.uploading || match.uploadingError); i++) {
@@ -657,6 +663,7 @@ bool match_beforeMapChangeOrRestart(bool fromScript, bool bComplete, bool shutdo
             Com_Printf("Match ended.\n");
 
         match.canceling = false;
+        match.cancelReason[0] = '\0';
         match.uploading = false;
         match.uploadingError = false;
         match.activated = false;

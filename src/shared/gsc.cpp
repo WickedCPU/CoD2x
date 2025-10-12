@@ -19,6 +19,7 @@
 
 
 int codecallback_OnStopGameType = 0;
+bool gsc_allowOneTimeLevelChange = false;
 
 
 // Array of custom methods for entities
@@ -210,6 +211,8 @@ void Scr_ShutdownSystem_Win32(int bComplete) {
  * @param source the source of the map change or restart.
  */
 bool gsc_beforeMapChangeOrRestart(bool fromScript, bool bComplete, bool shutdown, sv_map_change_source_e source) {
+	
+	bool allowMapChange = true;
 
 	// Call the OnStopGameType callback if it exists
 	if (codecallback_OnStopGameType && Scr_IsSystemActive())
@@ -222,9 +225,27 @@ bool gsc_beforeMapChangeOrRestart(bool fromScript, bool bComplete, bool shutdown
 		Scr_AddBool(shutdown);
 		Scr_AddBool(bComplete);
 		Scr_AddBool(fromScript);
-		unsigned short thread_id = Scr_ExecThread(codecallback_OnStopGameType, 3);
-		Scr_FreeThread(thread_id);
+		Scr_AddExecThread(codecallback_OnStopGameType, 4);
+		
+		const char* typeName = Scr_GetTypeName(0);
+		if (typeName != NULL && strcmp(typeName, "int") == 0) { // function might return undefined
+			int returnValue = Scr_GetInt(0);		
+			if (returnValue == 0) {
+				allowMapChange = false;
+			}
+		}
+
+		Scr_ClearOutParams();
+
+		Com_DPrintf("------- StopGameType returned allowMapChange: %d -------\n", allowMapChange);
 	}
+
+	if (!allowMapChange && shutdown == false && gsc_allowOneTimeLevelChange == false) {
+		Com_Printf("Map change is disabled (prevented by script)\n");
+		return false;
+	}
+
+	gsc_allowOneTimeLevelChange = false;
 
 	return true;
 }

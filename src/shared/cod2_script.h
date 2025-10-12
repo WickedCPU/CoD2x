@@ -210,6 +210,13 @@ inline char* Scr_GetTypeName(int param)
 }
 
 
+// Clears out all output parameters
+inline void Scr_ClearOutParams()
+{
+	ASM_CALL(RETURN_VOID, ADDR(0x0047d630, 0x080800ec), 0);
+}
+
+
 inline char* SL_ConvertToString(int index)
 {
 	char* ret;

@@ -105,7 +105,7 @@ typedef struct {
     bool uploading;
     bool uploadingError;
     bool canceling;
-    bool allow_map_change; // allow map change for once
+    char cancelReason[256];
     char url[256]; // URL to the match server
     HttpClient* httpClient;
     uint64_t start_time; // Time when the match data download started
