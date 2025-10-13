@@ -1,7 +1,5 @@
 #include "drawing.h"
 
-#include "shared.h"
-#include "../shared/cod2_dvars.h"
 #include "../shared/cod2_client.h"
 #include "../shared/cod2_dvars.h"
 #include "radar.h"
@@ -37,9 +35,7 @@ int CG_DrawFollow() {
     return drawed;
 }
 
-
-struct compass_hud_data
-{
+struct compass_hud_data {
     float x;
     float y;
     float w;
@@ -51,6 +47,8 @@ struct compass_hud_data
 /** Drawing of the rotating image of compass */
 void CG_DrawPlayerCompass(void* shader, vec4_t* color) {
     compass_hud_data* data; ASM__movr(data, "esi");
+
+    radar_draw();
 
     if (!cg_drawCompass->value.boolean)
         return;
@@ -87,8 +85,6 @@ void CG_DrawCompassFriendlies(compass_hud_data* data, vec4_t* color) {
 /** Draws the background for the compass. */
 void __cdecl CG_DrawPlayerCompassBack(void* shader, vec4_t* color) {
     compass_hud_data* data; ASM__movr(data, "esi");
-
-    radar_draw();
 
     if (!cg_drawCompass->value.boolean)
         return;

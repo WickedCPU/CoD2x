@@ -29,13 +29,16 @@
 dvar_t* cg_drawRadar;
 dvar_t* cg_hudRadarScale;
 dvar_t* cg_hudRadarMapImage;
-dvar_t* cg_hudRadarMapScale;
-dvar_t* cg_hudRadarMapOffsetX;
-dvar_t* cg_hudRadarMapOffsetY;
-dvar_t* cg_hudRadarMapRotation;
+dvar_t* cg_hudRadarMapImageOffsetX;
+dvar_t* cg_hudRadarMapImageOffsetY;
+dvar_t* cg_hudRadarEntityScale;
+dvar_t* cg_hudRadarEntityOffsetX;
+dvar_t* cg_hudRadarEntityOffsetY;
+dvar_t* cg_hudRadarMapImageRotation;
 dvar_t* cg_hudRadarOffsetX;
 dvar_t* cg_hudRadarOffsetY;
 dvar_t* cg_hudRadarPlayersNumberSwitch;
+dvar_t* cg_hudRadarColor;
 
 char radar_lastMapName[64] = {0};
 
@@ -107,9 +110,9 @@ void cg_hudRadarCalibrate() {
             float offsetX = ((cg_hudRadarCalibrate_point1_X /*- cg_hudRadarOffsetX->value.decimal*/) / radar_calibration_scale) - (cg_hudRadarCalibrate_point1_worldX * scale);
             float offsetY = ((cg_hudRadarCalibrate_point1_Y /*+ cg_hudRadarOffsetY->value.decimal*/) / radar_calibration_scale) + (cg_hudRadarCalibrate_point1_worldY * scale) - radar_height;
 
-            Dvar_SetFloat(cg_hudRadarMapScale, scale);
-            Dvar_SetFloat(cg_hudRadarMapOffsetX, offsetX);
-            Dvar_SetFloat(cg_hudRadarMapOffsetY, offsetY);
+            Dvar_SetFloat(cg_hudRadarEntityScale, scale);
+            Dvar_SetFloat(cg_hudRadarEntityOffsetX, offsetX);
+            Dvar_SetFloat(cg_hudRadarEntityOffsetY, offsetY);
 
             Com_Printf("Calibration done\n");
             Com_Printf("Point 1:        %f, %f\n", cg_hudRadarCalibrate_point1_X, cg_hudRadarCalibrate_point1_Y);
@@ -136,9 +139,9 @@ void cg_hudRadarCalibrate() {
 
 void compute_coordinates(float& x, float& y, float& w, float& h, vec3_t origin, float baseWidth, float baseHeight, int rotation, float radar_w, float radar_h) {
     
-    float mapOffsetX = cg_hudRadarMapOffsetX->value.decimal;
-    float mapOffsetY = cg_hudRadarMapOffsetY->value.decimal;
-    float mapScale = cg_hudRadarMapScale->value.decimal;
+    float mapOffsetX = cg_hudRadarEntityOffsetX->value.decimal;
+    float mapOffsetY = cg_hudRadarEntityOffsetY->value.decimal;
+    float mapScale = cg_hudRadarEntityScale->value.decimal;
     float scale = cg_hudRadarScale->value.decimal * radar_scale;
 
     vec3_t origin_scaled;
@@ -183,6 +186,9 @@ void compute_coordinates(float& x, float& y, float& w, float& h, vec3_t origin, 
 
     x = centerX + rotatedX;
     y = centerY + rotatedY;
+
+    x += cg_hudRadarMapImageOffsetX->value.decimal;
+    y += cg_hudRadarMapImageOffsetY->value.decimal;
 }
 
 
@@ -209,7 +215,7 @@ void radar_draw()
     verticalAlign_e verticalAlign = VERTICAL_ALIGN_TOP;
     
     float scale = cg_hudRadarScale->value.decimal * radar_scale;
-    int rotation = cg_hudRadarMapRotation->value.integer;
+    int rotation = cg_hudRadarMapImageRotation->value.integer;
 
 
     radar_w = radar_width * scale;
@@ -236,8 +242,8 @@ void radar_draw()
     radar_x = cg_hudRadarOffsetX->value.decimal;
     radar_y = cg_hudRadarOffsetY->value.decimal;
 
-    x = radar_x;
-    y = radar_y;
+    x = radar_x + cg_hudRadarMapImageOffsetX->value.decimal;
+    y = radar_y + cg_hudRadarMapImageOffsetY->value.decimal;
     w = radar_w;
     h = radar_h;
     
@@ -245,9 +251,16 @@ void radar_draw()
     //vec4_t radarColorBg = { 0, 0, 0.1, 0.3f };
     //CG_DrawRotatedPic(x, y, w, h, horizontalAlign, verticalAlign, rotation, radarColorBg, shaderWhite);
 
+    vec4_t colRadar = { 1, 1, 1, 1 };
+    if (cg_hudRadarColor->value.vec3) {
+        colRadar[0] = cg_hudRadarColor->value.vec3[0];
+        colRadar[1] = cg_hudRadarColor->value.vec3[1];
+        colRadar[2] = cg_hudRadarColor->value.vec3[2];
+    }
+
     // Draw radar map image
     materialHandle_t* radarMaterial = CG_RegisterMaterialNoMip(cg_hudRadarMapImage->value.string, MATERIAL_TYPE_DEFAULT);
-    CG_DrawRotatedPic(x, y, w, h, horizontalAlign, verticalAlign, rotation, colWhite, radarMaterial);
+    CG_DrawRotatedPic(x, y, w, h, horizontalAlign, verticalAlign, rotation, colRadar, radarMaterial);
 
 
     // Draw calibration UI
@@ -473,16 +486,20 @@ void radar_draw()
                 radarFireEvents[slot].startTime = cg.time;
             }
 
+            float player_arrow_scale = 1;
+            float player_circle_scale = 1;
+            float* player_arrow_color = colWhite;
             // Highlight of followed player
             if (cg.snap && i == cg.snap->ps.clientNum) {
-                float highlightScale = 1.8f;
-                CG_DrawRotatedPic(x - w*highlightScale/2, y - h*highlightScale/2, w*highlightScale, h*highlightScale, horizontalAlign, verticalAlign, playerRotation, 
-                    colYellow, CG_RegisterMaterialNoMip("radar_player_circle", MATERIAL_TYPE_DEFAULT));
-            }
-            
+                player_arrow_scale = 1.5f;
+                player_circle_scale = 1.2f;
+                player_arrow_color = colYellow;
+            } 
             // Draw player
-            CG_DrawRotatedPic(x - w/2, y - h/2, w, h, horizontalAlign, verticalAlign, playerRotation, colWhite, CG_RegisterMaterialNoMip("radar_player_arrow", MATERIAL_TYPE_DEFAULT));
-            CG_DrawRotatedPic(x - w/2, y - h/2, w, h, horizontalAlign, verticalAlign, playerRotation, color, CG_RegisterMaterialNoMip("radar_player_circle", MATERIAL_TYPE_DEFAULT));
+            CG_DrawRotatedPic(x - w*player_arrow_scale/2, y - h*player_arrow_scale/2, w*player_arrow_scale, h*player_arrow_scale, horizontalAlign, verticalAlign, 
+                playerRotation, player_arrow_color, CG_RegisterMaterialNoMip("radar_player_arrow", MATERIAL_TYPE_DEFAULT));
+            CG_DrawRotatedPic(x - w*player_circle_scale/2, y - h*player_circle_scale/2, w*player_circle_scale, h*player_circle_scale, horizontalAlign, verticalAlign, 
+                playerRotation, color, CG_RegisterMaterialNoMip("radar_player_circle", MATERIAL_TYPE_DEFAULT));
 
 
             // Player number generation
@@ -507,7 +524,7 @@ void radar_draw()
 
             // Player number text size
             const char* strNum = va("%i", playerTeamNumber);
-            float textNumScale = 0.01f;
+            float textNumScale = 0.01f * player_circle_scale;
             float textNumWidth = CL_TextWidth(strNum, 0, fontNormal) * textNumScale * playerSize * scale * 3.0;
             float textNumHeight = CL_TextHeight(fontNormal) * textNumScale * playerSize * scale * 3.0;
 
@@ -528,6 +545,12 @@ void radar_frame() {
         strncpy(radar_lastMapName, mapName, sizeof(radar_lastMapName) - 1);
         radar_lastMapName[sizeof(radar_lastMapName) - 1] = '\0';
 
+        // No map name
+        if (radar_lastMapName[0] == '\0') {
+            Dvar_SetString(cg_hudRadarMapImage, "");
+            return;
+        }
+
         const char* file = nullptr;
         // Read file
         int i = FS_ReadFile(va("maps/mp/%s.radar", mapName), (void**)&file);
@@ -541,6 +564,7 @@ void radar_frame() {
         const char* data = file;
 
         // Parse radar file values into temporary variables
+        Com_Parse(&data); // skip header
         char* imageName = Com_Parse(&data);
         if (!imageName || imageName[0] == '\0') {
             Com_Error(ERR_DROP, "Invalid image name in radar file: maps/%s.radar\n", mapName);
@@ -550,42 +574,65 @@ void radar_frame() {
         strncpy(imageNameTemp, imageName, sizeof(imageNameTemp) - 1);
         imageNameTemp[sizeof(imageNameTemp) - 1] = '\0';
 
-        char* scale = Com_Parse(&data);
-        if (!scale || scale[0] == '\0') {
+        Com_Parse(&data); // skip header
+        char* entityScaleStr = Com_Parse(&data);
+        if (!entityScaleStr || entityScaleStr[0] == '\0') {
             Com_Error(ERR_DROP, "Invalid scale in radar file: maps/%s.radar\n", mapName);
             return;
         }
-        float scaleTemp = (float)atof(scale);
+        float entityScale = (float)atof(entityScaleStr);
 
-        char* offsetX = Com_Parse(&data);
-        if (!offsetX || offsetX[0] == '\0') {
+        Com_Parse(&data); // skip header
+        char* entityOffsetXStr = Com_Parse(&data);
+        if (!entityOffsetXStr || entityOffsetXStr[0] == '\0') {
             Com_Error(ERR_DROP, "Invalid offsetX in radar file: maps/%s.radar\n", mapName);
             return;
         }
-        float offsetXTemp = (float)atof(offsetX);
+        float entityOffsetX = (float)atof(entityOffsetXStr);
 
-        char* offsetY = Com_Parse(&data);
-        if (!offsetY || offsetY[0] == '\0') {
+        Com_Parse(&data); // skip header
+        char* entityOffsetYStr = Com_Parse(&data);
+        if (!entityOffsetYStr || entityOffsetYStr[0] == '\0') {
             Com_Error(ERR_DROP, "Invalid offsetY in radar file: maps/%s.radar\n", mapName);
             return;
         }
-        float offsetYTemp = (float)atof(offsetY);
+        float entityOffsetY = (float)atof(entityOffsetYStr);
 
-        char* rotation = Com_Parse(&data);
-        if (!rotation || rotation[0] == '\0') {
+        Com_Parse(&data); // skip header
+        char* rotationStr = Com_Parse(&data);
+        if (!rotationStr || rotationStr[0] == '\0') {
             Com_Error(ERR_DROP, "Invalid rotation in radar file: maps/%s.radar\n", mapName);
             return;
         }
-        int rotationTemp = atoi(rotation);
+        int rotation = atoi(rotationStr);
+
+        Com_Parse(&data); // skip header
+        char* imageOffsetXStr = Com_Parse(&data);
+        if (!imageOffsetXStr || imageOffsetXStr[0] == '\0') {
+            Com_Error(ERR_DROP, "Invalid imageOffsetX in radar file: maps/%s.radar\n", mapName);
+            return;
+        }
+        float imageOffsetX = (float)atof(imageOffsetXStr);
+
+        Com_Parse(&data); // skip header
+        char* imageOffsetYStr = Com_Parse(&data);
+        if (!imageOffsetYStr || imageOffsetYStr[0] == '\0') {
+            Com_Error(ERR_DROP, "Invalid imageOffsetY in radar file: maps/%s.radar\n", mapName);
+            return;
+        }
+        float imageOffsetY = (float)atof(imageOffsetYStr);
+
 
         FS_FreeFile((void*)file);
 
         // Now set Dvars after file is freed
         Dvar_SetString(cg_hudRadarMapImage, imageNameTemp);
-        Dvar_SetFloat(cg_hudRadarMapScale, scaleTemp);
-        Dvar_SetFloat(cg_hudRadarMapOffsetX, offsetXTemp);
-        Dvar_SetFloat(cg_hudRadarMapOffsetY, offsetYTemp);
-        Dvar_SetInt(cg_hudRadarMapRotation, rotationTemp);
+        Dvar_SetFloat(cg_hudRadarMapImageOffsetX, imageOffsetX);
+        Dvar_SetFloat(cg_hudRadarMapImageOffsetY, imageOffsetY);
+        Dvar_SetFloat(cg_hudRadarEntityScale, entityScale);
+        Dvar_SetFloat(cg_hudRadarEntityOffsetX, entityOffsetX);
+        Dvar_SetFloat(cg_hudRadarEntityOffsetY, entityOffsetY);
+        Dvar_SetInt(cg_hudRadarMapImageRotation, rotation);
 
     }
 }
@@ -599,41 +646,25 @@ void radar_unload() {
 void radar_init() {
     Cmd_AddCommand("cg_hudRadarCalibrate", cg_hudRadarCalibrate);
 
-    cg_drawRadar =                      Dvar_RegisterBool  ("cg_drawRadar", false,                               (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
-    cg_hudRadarScale =                  Dvar_RegisterFloat ("cg_hudRadarScale", 1,           -FLT_MAX, FLT_MAX,  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
-    cg_hudRadarMapImage =               Dvar_RegisterString("cg_hudRadarMapImage", "",                           (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET | DVAR_ROM));
-    cg_hudRadarMapScale =               Dvar_RegisterFloat ("cg_hudRadarMapScale", 1,        0,        1.0f,     (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET | DVAR_ROM));
-    cg_hudRadarMapOffsetX =             Dvar_RegisterFloat ("cg_hudRadarMapOffsetX", 0,      -FLT_MAX, FLT_MAX,  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET | DVAR_ROM));
-    cg_hudRadarMapOffsetY =             Dvar_RegisterFloat ("cg_hudRadarMapOffsetY", 0,      -FLT_MAX, FLT_MAX,  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET | DVAR_ROM));
-    cg_hudRadarMapRotation =            Dvar_RegisterInt   ("cg_hudRadarMapRotation", 0,     -180,     180,      (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET | DVAR_ROM));
-    cg_hudRadarOffsetX =                Dvar_RegisterFloat ("cg_hudRadarOffsetX", 5,         -FLT_MAX, FLT_MAX,  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
-    cg_hudRadarOffsetY =                Dvar_RegisterFloat ("cg_hudRadarOffsetY", 20,        -FLT_MAX, FLT_MAX,  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
-    cg_hudRadarPlayersNumberSwitch =    Dvar_RegisterBool  ("cg_hudRadarPlayersNumberSwitch", false,             (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_drawRadar =                      Dvar_RegisterBool  ("cg_drawRadar", false,                                  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_hudRadarScale =                  Dvar_RegisterFloat ("cg_hudRadarScale", 1,              -FLT_MAX, FLT_MAX,  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_hudRadarMapImage =               Dvar_RegisterString("cg_hudRadarMapImage", "",                              (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_hudRadarMapImageOffsetX =        Dvar_RegisterFloat ("cg_hudRadarMapImageOffsetX", 0,    -FLT_MAX, FLT_MAX,  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_hudRadarMapImageOffsetY =        Dvar_RegisterFloat ("cg_hudRadarMapImageOffsetY", 0,    -FLT_MAX, FLT_MAX,  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_hudRadarMapImageRotation =       Dvar_RegisterInt   ("cg_hudRadarMapImageRotation", 0,   -180,     180,      (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_hudRadarEntityScale =            Dvar_RegisterFloat ("cg_hudRadarEntityScale", 1,        0,        1.0f,     (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_hudRadarEntityOffsetX =          Dvar_RegisterFloat ("cg_hudRadarEntityOffsetX", 0,      -FLT_MAX, FLT_MAX,  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_hudRadarEntityOffsetY =          Dvar_RegisterFloat ("cg_hudRadarEntityOffsetY", 0,      -FLT_MAX, FLT_MAX,  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_hudRadarOffsetX =                Dvar_RegisterFloat ("cg_hudRadarOffsetX", 5,            -FLT_MAX, FLT_MAX,  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_hudRadarOffsetY =                Dvar_RegisterFloat ("cg_hudRadarOffsetY", 20,           -FLT_MAX, FLT_MAX,  (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_hudRadarPlayersNumberSwitch =    Dvar_RegisterBool  ("cg_hudRadarPlayersNumberSwitch",    false,             (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+    cg_hudRadarColor =                  Dvar_RegisterVec3  ("cg_hudRadarColor",                  1, 1, 1, 0, 1,     (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
 
 
     /*#if DEBUG
     Dvar_SetBool(cg_hudRadar, true);
     #endif*/
 
-    /*
-    // Toujane
-    Dvar_SetFloat(cg_hudRadarMapScale, 0.0219f);
-    Dvar_SetFloat(cg_hudRadarMapOffsetX, 17.7f);
-    Dvar_SetFloat(cg_hudRadarMapOffsetY, -16.4f);
-    Dvar_SetFloat(cg_hudRadarMapRotation, -90);
-
-    // Burgundy
-    Dvar_SetFloat(cg_hudRadarMapScale, 0.0228f);
-    Dvar_SetFloat(cg_hudRadarMapOffsetX, 41.09f);
-    Dvar_SetFloat(cg_hudRadarMapOffsetY, -22.71f);
-    Dvar_SetFloat(cg_hudRadarMapRotation, 0);
-
-    // Railyard
-    Dvar_SetFloat(cg_hudRadarMapScale, 0.0202f);
-    Dvar_SetFloat(cg_hudRadarMapOffsetX, 69.81f);
-    Dvar_SetFloat(cg_hudRadarMapOffsetY, -40.73f);
-    Dvar_SetFloat(cg_hudRadarMapRotation, 180);
-    */
 }
 
 /** Called before the entry point is called. Used to patch the memory. */
