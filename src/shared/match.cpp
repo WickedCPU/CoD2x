@@ -545,22 +545,15 @@ void match_cmd() {
 
                 Com_Printf("Match data downloaded successfully, loading first map...\n");
 
-                // Build sv_maprotation string from match.data.maps
-                std::string maprotation;
-                for (int i = 0; i < match.data.maps_count; ++i) {
-                    if (i > 0) maprotation += " ";
-                    maprotation += "map ";
-                    maprotation += match.data.maps[i];
-                }
-
-                Dvar_SetString(Dvar_GetDvarByName("sv_mapRotation"), maprotation.c_str());
-                Dvar_SetString(Dvar_GetDvarByName("sv_mapRotationCurrent"), "");
-                //Dvar_SetString(Dvar_GetDvarByName("g_gametype"), "sd");
-
                 match.downloading = false;
                 match.loading = true;
+                
+                if (match.data.maps_count > 0) {
+                    Cbuf_AddText(va("map %s\n", match.data.maps[0]));
+                } else {
+                    Cbuf_AddText("map_restart\n");
+                }
 
-                Cbuf_AddText("map_rotate\n");
             },
             [url](const std::string& error) {
                 match.downloading = false;
@@ -601,15 +594,7 @@ void match_cmd() {
 
     } else if (Q_stricmp(command, "cancel") == 0) {
 
-        if (match.activated) {
-            match.canceling = true;
-            match.allow_map_change = true;
-            Com_Printf("Match is being canceled...\n");
-            Cbuf_AddText("fast_restart\n");
-            return;
-        } else {
-            Com_Printf("No match is currently active.\n");
-        }
+        match_cancel("console command");
 
         return;
 
@@ -654,35 +639,6 @@ void match_onStartGameType() {
  * - is called after OnStopGameType callback, so the mod had time to complete the score (for example when players disconnect before full map end)
  */
 bool match_beforeMapChangeOrRestart(bool fromScript, bool bComplete, bool shutdown, sv_map_change_source_e source) {
-
-    // Map is changing via map_rotate
-    if (match.activated && bComplete && source == SV_MAP_CHANGE_SOURCE_MAP_ROTATE) 
-    {
-        // TODO removed untill we know the order of maps
-        /*
-        // If we looped thru all maps and there is no more map to rotate to, cancel the match
-        auto mapname = Dvar_GetDvarByName("sv_mapRotationCurrent");
-        if (mapname && mapname->value.string && mapname->value.string[0] == '\0') {
-            match.canceling = true;
-
-            // Kick all players, match is finished
-            for (int i = 0; i < sv_maxclients->value.integer; i++) {
-                client_t* client = &svs_clients[i];
-                
-                if (client && client->state) {
-                    SV_DropClient(client, "\n^2Match has finished^7");
-                    Com_Printf("### after SV_DropClient\n");
-                }
-            }
-
-            Com_Printf("======================================================\n");
-            Com_Printf("Match finished successfully.\n");
-            Com_Printf("- URL: %s\n", match.url);
-            Com_Printf("- Match ID: %s\n", match.data.match_id);
-            Com_Printf("- Teams: %s (%s) vs %s (%s)\n", match.data.team1.name, match.data.team1.id, match.data.team2.name, match.data.team2.id);
-            Com_Printf("======================================================\n");
-        }*/
-    }
 
     // Upload error about server error
     if (shutdown && com_errorEntered && com_last_error && com_last_error[0] != '\0') {
