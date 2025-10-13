@@ -199,4 +199,10 @@ inline int CG_GetShaderConfigString(int index, char* buffer, int bufferSize) {
 
 
 
+inline int CG_CalcMuzzlePoint(const vec3_t pos, int clientNum, int32_t sourceEntityNum) {
+    int result;
+    ASM_CALL(RETURN(result), 0x004d7930, 1, EDI(pos), EBX(clientNum), PUSH(sourceEntityNum)); // CG_CalcMuzzlePoint
+    return result;
+}
+
 #endif

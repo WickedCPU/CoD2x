@@ -17,6 +17,7 @@ dvar_t* cg_drawSpectatedPlayerName = NULL;
 dvar_t* cg_drawCompass = NULL;
 dvar_t* cg_hudCompassOffsetX = NULL;
 dvar_t* cg_hudCompassOffsetY = NULL;
+dvar_t* cg_debugBullets = NULL;
 
 /**
  * Drawing of the text "following" and player name in top center of the screen when spectating.
@@ -100,6 +101,36 @@ void CG_DrawCrosshairNames() {
 }
 
 
+void CG_BulletHitEvent() {
+    int32_t clientNum;
+    int32_t sourceEntityNum;
+    vec3_t* end;
+
+    ASM__movr(clientNum, "eax");
+    ASM__movr(sourceEntityNum, "ecx");
+    ASM__movr(end, "esi");
+
+    // CoD2x: Debug bullets
+    if (cg_debugBullets->value.boolean) {
+        Com_Printf("CG_BulletHitEvent called: clientNum=%d, sourceEntityNum=%d, end=(%.2f, %.2f, %.2f)\n", clientNum, sourceEntityNum, (*end)[0], (*end)[1], (*end)[2]);
+
+        CL_AddDebugCrossPoint(*end, 3, colRed, 1000, 0, 0);
+
+        vec3_t start;
+        int result = CG_CalcMuzzlePoint(start, clientNum, sourceEntityNum);
+
+        if (result) {
+            CL_AddDebugLine(start, *end, colYellow, 1000, 0, 0);
+        }
+    }
+    // CoD2x: End
+
+    ASM_CALL(RETURN_VOID, 0x004d7a50, 0, EAX(clientNum), ECX(sourceEntityNum), ESI(end));
+}
+
+
+
+
 // Help web page removed, fixed crash when getting translations
 void Sys_DirectXFatalError() {
     MessageBoxA(NULL, "DirectX(R) encountered an unrecoverable error.", "DirectX Error", MB_OK | MB_ICONERROR);
@@ -118,6 +149,9 @@ void drawing_init() {
     cg_drawCompass = Dvar_RegisterBool("cg_drawCompass", true, (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
     cg_hudCompassOffsetX = Dvar_RegisterFloat("cg_hudCompassOffsetX", 0.0f, -640.0f, 640.0f, (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
     cg_hudCompassOffsetY = Dvar_RegisterFloat("cg_hudCompassOffsetY", 0.0f, -480.0f, 480.0f, (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+
+    cg_debugBullets = Dvar_RegisterBool("cg_debugBullets", false, (enum dvarFlags_e)(DVAR_CHANGEABLE_RESET | DVAR_CHEAT));
+
 }
 
 /** Called before the entry point is called. Used to patch the memory. */
@@ -130,6 +164,13 @@ void drawing_patch() {
     patch_call(0x004c68e8, (unsigned int)CG_DrawCompassFriendlies);
     patch_call(0x004cbd36, (unsigned int)CG_DrawCrosshairNames);
     patch_call(0x004cbd6b, (unsigned int)CG_DrawCrosshairNames);
+
+    patch_call(0x004d7bce, (unsigned int)CG_BulletHitEvent);
+    patch_call(0x004d7bce, (unsigned int)CG_BulletHitEvent);
+
+    // Make tracers visible also for 1st person view
+    //patch_byte(0x004d7a91, 0x74); // Always jump
+    //patch_byte(0x004d7a89, 0xeb); // Always jump
 
     // Improve DirectX error message
     patch_int32(0x0040fcf5 + 4, (unsigned int)Sys_DirectXFatalError);
