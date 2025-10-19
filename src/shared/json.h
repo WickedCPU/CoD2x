@@ -95,6 +95,55 @@ static inline bool json_iter_array(const char *json, const char *path, const std
 }
 
 /**
+ * @brief Iterates over properties of a JSON object at the specified path and invokes a callback for each property.
+ *
+ * This function parses the given JSON string, locates the object at the provided JSON path,
+ * and for each property in the object, calls the user-provided callback function.
+ * Values are automatically converted to strings (numbers become "123", booleans become "true"/"false").
+ *
+ * @param json The JSON string to parse.
+ * @param path The JSON path to the target object (e.g., ".user" or "" for root object).
+ * @param cb       Callback invoked for each property: (key, value)
+ *                 - @p key   = property key as null-terminated string
+ *                 - @p value = property value as null-terminated string (converted from any JSON type)
+ * @return false if callback returns false for any property, true otherwise.
+ */
+static inline bool json_iter_object(const char *json, const char *path, const std::function<bool(const std::string&, const std::string&)> &cb) {
+    struct mg_str j = mg_str(json);
+    struct mg_str obj = mg_json_get_tok(j, path); // get object token
+    if (obj.buf == NULL) return true;
+
+    size_t ofs = 0;
+    struct mg_str key, val;
+    while ((ofs = mg_json_next(obj, ofs, &key, &val)) > 0) {
+        // Convert key to string (remove quotes if present)
+        std::string keyStr;
+        if (key.len > 2 && key.buf[0] == '"' && key.buf[key.len-1] == '"') {
+            keyStr = std::string(key.buf + 1, key.len - 2);
+        } else {
+            keyStr = std::string(key.buf, key.len);
+        }
+        
+        // Build path for this property and use json_get_str to convert value
+        std::string propPath = std::string(path) + "." + keyStr;
+        char valueBuffer[512];
+        std::string valueStr;
+        
+        if (json_get_str(json, propPath.c_str(), valueBuffer, sizeof(valueBuffer))) {
+            valueStr = std::string(valueBuffer);
+        } else {
+            // Fallback: use raw value
+            valueStr = std::string(val.buf, val.len);
+        }
+        
+        if (!cb(keyStr, valueStr)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/**
  * Escape a string for JSON output.
  * Example: json_escape_string("Hello \"world\"", escaped, sizeof(escaped)); => "Hello \"world\""
  */

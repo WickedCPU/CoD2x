@@ -179,28 +179,6 @@ bool match_parse_json_match_data(const char* json_str, MatchData* match_data) {
         return false;
     }
 
-    // format
-    if (!json_get_str(json_str, "$.format", match_data->format, sizeof(match_data->format))) {
-        match_data->error = "Missing or invalid 'format'";
-        return false;
-    }
-    if (strcmp(match_data->format, "BO1") != 0 && strcmp(match_data->format, "BO3") != 0 && strcmp(match_data->format, "BO5") != 0) {
-        match_data->error = "Unsupported format (only BO1, BO3 and BO5 are supported)";
-        return false;
-    }
-
-    // number of players
-    long players_count = 0;
-    if (!json_get_long(json_str, "$.playersCount", &players_count)) {
-        match_data->error = "Missing or invalid 'playersCount'";
-        return false;
-    }
-    if (players_count < 0 || players_count > MAX_TEAM_PLAYERS) {
-        match_data->error = "Invalid playersCount (must be between 0 and " STRINGIFY(MAX_TEAM_PLAYERS) ")";
-        return false;
-    }
-    match_data->players_count = players_count;
-
     // maps
     int map_count = 0;
     if (!json_iter_array(json_str, "$.maps", [&](int idx, const char* val, int len) {
@@ -208,6 +186,12 @@ bool match_parse_json_match_data(const char* json_str, MatchData* match_data) {
             match_data->error = "Map name is empty on index " + std::to_string(idx);
             return false;
         }
+        
+        if (map_count >= MAX_MAPS) {
+            match_data->error = "Too many maps (max " STRINGIFY(MAX_MAPS) ")";
+            return false;
+        }
+        
         const char* inner = val;
         int innerLen = len;
         if (innerLen >= 2 && inner[0] == '"' && inner[innerLen - 1] == '"') {
@@ -228,26 +212,12 @@ bool match_parse_json_match_data(const char* json_str, MatchData* match_data) {
             return false;
         }
 
-        if (map_count > MAX_MAPS) {
-            match_data->error = "Too many maps (max " STRINGIFY(MAX_MAPS) ")";
-            return false;
-        }
         return true;
     })) {
         return false;
     }
     match_data->maps_count = map_count;
 
-
-    // Maps are defined
-    if (map_count > 0) {
-        if ((strcmp(match_data->format, "BO1") == 0 && map_count != 1) ||
-            (strcmp(match_data->format, "BO3") == 0 && map_count != 3) ||
-            (strcmp(match_data->format, "BO5") == 0 && map_count != 5)) {
-            match_data->error = "Invalid map count (" + std::to_string(map_count) + ") for format '" + std::string(match_data->format) + "'";
-            return false;
-        }
-    }
 
     // Helper for teams
     auto fill_team = [&](int teamNumber, MatchTeam* team) -> bool {
@@ -266,14 +236,18 @@ bool match_parse_json_match_data(const char* json_str, MatchData* match_data) {
             return false;
         }
 
-        // tag, can be null
-        snprintf(path, sizeof(path), "$.team%i.tag", teamNumber);
-        json_get_str(json_str, path, team->tag, MAX_NAME_LENGTH);
-
         // players
         snprintf(path, sizeof(path), "$.team%i.players", teamNumber);
         team->num_players = 0;
         if (!json_iter_array(json_str, path, [&](int idx, const char* val, int len) {
+
+            if (team->num_players >= MAX_TEAM_PLAYERS) {
+                match_data->error = "Too many players in team " + std::to_string(teamNumber) + " (max " STRINGIFY(MAX_TEAM_PLAYERS) ")";
+                return false;
+            }
+
+            std::string json_str_holder(val, len);
+            const char* json_str = json_str_holder.c_str();
 
             // Fill team number for player for easy access
             team->players[team->num_players].teamNumber = teamNumber;
@@ -283,20 +257,27 @@ bool match_parse_json_match_data(const char* json_str, MatchData* match_data) {
             team->players[team->num_players].teamName[MAX_NAME_LENGTH - 1] = '\0';
 
             // player id
-            if (!json_get_str(val, "$.uuid", team->players[team->num_players].id, MAX_ID_LENGTH)) {
+            if (!json_get_str(json_str, "$.uuid", team->players[team->num_players].id, MAX_ID_LENGTH)) {
                 match_data->error = "Invalid player id in team " + std::to_string(teamNumber) + " on index " + std::to_string(idx);
                 return false;
             }
             // player name
-            if (!json_get_str(val, "$.name", team->players[team->num_players].name, MAX_NAME_LENGTH)) {
+            if (!json_get_str(json_str, "$.name", team->players[team->num_players].name, MAX_NAME_LENGTH)) {
                 match_data->error = "Invalid player name in team " + std::to_string(teamNumber) + " on index " + std::to_string(idx);
                 return false;
             }
+
+            // Save any other simple values
+            json_iter_object(json_str, "$", [team](const std::string& key, const std::string& value) {
+                if (key == "uuid" || key == "name") {
+                    return true; // Continue iteration
+                }
+                team->players[team->num_players].otherData[key] = value;
+                return true; // Continue iteration
+            });
+
             team->num_players++;
-            if (team->num_players >= MAX_TEAM_PLAYERS) {
-                match_data->error = "Too many players in team " + std::to_string(teamNumber) + " (max " STRINGIFY(MAX_TEAM_PLAYERS) ")";
-                return false;
-            }
+
             return true;
         })) {
             return false;
@@ -305,6 +286,19 @@ bool match_parse_json_match_data(const char* json_str, MatchData* match_data) {
             match_data->error = "Team " + std::to_string(teamNumber) + " has no players";
             return false;
         }
+
+        // Save any other simple values
+        char teamPath[32];
+        snprintf(teamPath, sizeof(teamPath), "$.team%i", teamNumber);
+        json_iter_object(json_str, teamPath, [team](const std::string& key, const std::string& value) {         
+            // Ignore keys we processed already
+            if (key == "id" || key == "name" || key == "players") {
+                return true; // Continue iteration
+            }
+            team->otherData[key] = value;
+            return true; // Continue iteration
+        });
+
         return true;
     };
 
@@ -312,15 +306,16 @@ bool match_parse_json_match_data(const char* json_str, MatchData* match_data) {
         return false;
     }
 
-    // Check number of players
-    if (match_data->team1.num_players < match_data->players_count) {
-        match_data->error = "Team 1 has less players than required by playersCount";
-        return false;
-    }
-    if (match_data->team2.num_players < match_data->players_count) {
-        match_data->error = "Team 2 has less players than required by playersCount";
-        return false;
-    }
+
+    // Save any other simple values
+    json_iter_object(json_str, "$", [match_data](const std::string& key, const std::string& value) {
+        // Ignore keys we processed already
+        if (key == "matchId" || key == "maps" || key == "team1" || key == "team2") {
+            return true; // Continue iteration
+        }
+        match_data->otherData[key] = value;
+        return true; // Continue iteration
+    });
 
 
     return true;
@@ -376,11 +371,6 @@ bool match_redownload() {
                     return;
                 }
             }
-            if (strncmp(match.data.format, matchData.format, sizeof(match.data.format)) != 0) {
-                Com_Printf("Match redownloading error, format does not match: %s != %s\n", match.data.format, matchData.format);
-                match_upload_error("Match redownloading error", "Match format does not match the original one");
-                return;
-            }
 
             // Update match data with new data
             match.data = matchData;
@@ -407,6 +397,9 @@ void match_cancel(const char* reason) {
         }
         gsc_allowOneTimeLevelChange = true; // Allow map change for fast_restart even if level change is disabled via GSC script
         Com_Printf("Match is being canceled...\n");
+        if (match.cancelReason[0] != '\0') {
+            Com_Printf("%s\n", match.cancelReason);
+        }
         Cbuf_AddText("fast_restart\n");
     } else {
         Com_Printf("No match is currently active.\n");
@@ -499,8 +492,8 @@ void match_cmd() {
             return;
         }
 
-        if (match.downloading || match.loading) {
-            Com_Printf("Match is already loading, please wait.\n");
+        if (match.activated || match.downloading || match.loading) {
+            Com_Printf("Match is already in progress, cancel it first.\n");
             return;
         }
 
@@ -510,10 +503,17 @@ void match_cmd() {
             match.httpClient = nullptr;
         }
 
-        // TODO když dám znovu create a skončí to chybou, nastane chyba skriptu
-
         match.data = MatchData{};
-        snprintf(match.url, sizeof(match.url), "%s", endpoint);
+        
+        // Safely copy URL with bounds checking
+        size_t endpoint_len = strlen(endpoint);
+        if (endpoint_len >= sizeof(match.url)) {
+            Com_Printf("Match endpoint URL too long (max %zu characters)\n", sizeof(match.url) - 1);
+            return;
+        }
+        strncpy(match.url, endpoint, sizeof(match.url) - 1);
+        match.url[sizeof(match.url) - 1] = '\0';
+        
         match.downloading = true;
         match.loading = false;
         match.activated = false;
@@ -685,7 +685,7 @@ bool match_beforeMapChangeOrRestart(bool fromScript, bool bComplete, bool shutdo
 
         if (shutdown && (match.uploading || match.uploadingError)) {
             // Since server is shutting down, Com_Frame is not called, so we need to poll here to process the pending match data upload
-            for(int i = 0; i < 10 && (match.uploading || match.uploadingError); i++) {
+            for(int i = 0; i < 10 && (match.uploading || match.uploadingError) && match.httpClient; i++) {
                 match.httpClient->poll(100);
             }
         }

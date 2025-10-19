@@ -44,6 +44,19 @@ callback_match_onStartGameType() {
             println("   " + team2_player_names[i] + "    (" + team2_player_uuids[i] + ")");
         }
 
+        // Read other custom data
+        println("Script: Other Data:");
+        playersCount = matchGetData("playersCount");
+        println("   playersCount: " + playersCount);
+        forceNickNames = matchGetData("forceNickNames");
+        println("   forceNickNames: " + forceNickNames);
+        team1_specialTeamKey = matchGetData("team1_specialTeamKey");
+        println("   team1_specialTeamKey: " + team1_specialTeamKey);
+        team2_specialTeamKey = matchGetData("team2_specialTeamKey");
+        println("   team2_specialTeamKey: " + team2_specialTeamKey);
+
+        //matchCancel("Some error occurred");
+
         matchUploadData(::onUploadDone, ::onUploadError);
 
         for(;;) {

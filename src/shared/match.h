@@ -70,6 +70,7 @@ typedef struct {
 typedef struct {
     char id[MAX_ID_LENGTH];
     char name[MAX_NAME_LENGTH];
+    ordered_map<std::string, std::string> otherData;
 
     // Local data
     int teamNumber;                 // filled automatically
@@ -79,9 +80,9 @@ typedef struct {
 typedef struct {
     char id[MAX_ID_LENGTH];
     char name[MAX_NAME_LENGTH];
-    char tag[MAX_NAME_LENGTH];
     MatchPlayer players[MAX_TEAM_PLAYERS];
     int num_players;
+    ordered_map<std::string, std::string> otherData;
 } MatchTeam;
 
 typedef struct {
@@ -89,10 +90,9 @@ typedef struct {
     char match_id[MAX_ID_LENGTH];
     MatchTeam team1;
     MatchTeam team2;
-    char format[64]; // BO1, BO3, BO5
     char maps[MAX_MAPS][MAX_MAP_NAME_LENGTH]; // Up to 5 maps
     int maps_count;
-    int players_count; // number of players in team, if 0 then any number of players is allowed
+    ordered_map<std::string, std::string> otherData;
 
     // Local data
     std::string json;

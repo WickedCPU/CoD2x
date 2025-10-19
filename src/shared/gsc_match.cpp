@@ -67,6 +67,10 @@ void gsc_match_playerGetSetData(int action, scr_entref_t ref) {
 		match.progressData.playerData[array_key].erase("debug");
 	}
 
+	for (const auto& key : player->otherData.keys()) {
+		match.progressData.playerData[array_key][key] = player->otherData.at(key);
+	}
+
 
 
 	// Get
@@ -258,10 +262,18 @@ void gsc_match_getSetData(int action) {
 	match.progressData.globalData["team2_id"] = match.data.team2.id;
 	match.progressData.globalData["team1_name"] = match.data.team1.name;
 	match.progressData.globalData["team2_name"] = match.data.team2.name;
-	match.progressData.globalData["team1_tag"] = match.data.team1.tag;
-	match.progressData.globalData["team2_tag"] = match.data.team2.tag;
-	match.progressData.globalData["format"] = match.data.format;
-	match.progressData.globalData["players_count"] = std::to_string(match.data.players_count);
+
+	// Add other data from match data
+	for (const auto& key : match.data.otherData.keys()) {
+		match.progressData.globalData[key] = match.data.otherData.at(key);
+	}
+	// Add team other data
+	for (const auto& key : match.data.team1.otherData.keys()) {
+		match.progressData.globalData["team1_" + key] = match.data.team1.otherData.at(key);
+	}
+	for (const auto& key : match.data.team2.otherData.keys()) {
+		match.progressData.globalData["team2_" + key] = match.data.team2.otherData.at(key);
+	}
 
 	// Get
 	if (action == 0) {
