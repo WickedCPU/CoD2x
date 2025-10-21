@@ -81,6 +81,7 @@ bool match_upload_match_data(std::function<void()> onDone, std::function<void(co
             match.uploading = false;
             if (res.status != 200 && res.status != 201) {
                 Com_Printf("Match uploading error, invalid status: %d\n%s\n", res.status, res.body.c_str());
+                Com_Printf("Uploaded JSON data:\n%s\n", match_create_json_data().c_str());
                 if (onError) onError("Invalid status: " + std::to_string(res.status));
                 return;
             }

@@ -67,8 +67,10 @@ void gsc_match_playerGetSetData(int action, scr_entref_t ref) {
 		match.progressData.playerData[array_key].erase("debug");
 	}
 
-	for (const auto& key : player->otherData.keys()) {
-		match.progressData.playerData[array_key][key] = player->otherData.at(key);
+	if (player != nullptr) {
+		for (const auto& key : player->otherData.keys()) {
+			match.progressData.playerData[array_key][key] = player->otherData.at(key);
+		}
 	}
 
 
