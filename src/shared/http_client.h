@@ -30,7 +30,7 @@ public:
     using DownloadCallback = std::function<void(const char* data, size_t length, size_t downloaded, size_t total)>;
     
     // Headers used in every request
-    std::vector<std::string> headers;
+    std::vector<std::string> headers = {};
 
 
     HttpClient() {
@@ -117,6 +117,8 @@ public:
         ctx->onDone = std::move(onDone);
         ctx->onDownload = std::move(onDownload);
         ctx->onError = std::move(onError);
+
+        if (timeout_ms <= 0) connect_timeout_ms = 0;
         ctx->timeout_ms = timeout_ms;
         ctx->timeout_connect_ms = connect_timeout_ms;
 
@@ -162,6 +164,8 @@ public:
         ctx->data    = data    ? data    : "";
         ctx->onDone  = std::move(onDone);
         ctx->onError = std::move(onError);
+
+        if (timeout_ms <= 0) connect_timeout_ms = 0;
         ctx->timeout_ms = timeout_ms;
         ctx->timeout_connect_ms = connect_timeout_ms;
 
