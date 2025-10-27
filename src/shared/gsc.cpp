@@ -29,9 +29,13 @@ scr_method_t scriptMethods[] =
 	{"test_playerGetName", gsc_test_playerGetName, 0},
 	#endif
 
+	{"getIp", gsc_player_getip, 0},
 	{"getHWID", gsc_player_playerGetHWID, 0},
 	{"getCDKeyHash", gsc_player_playerGetCDKeyHash, 0},
 	{"getAuthorizationStatus", gsc_player_playerGetAuthorizationStatus, 0},
+
+	{"getViewOrigin", gsc_player_getViewOrigin, 0},
+	{"getStance", gsc_player_getStance, 0},
 
 	{"matchPlayerGetData", gsc_match_playerGetData, 0},
 	{"matchPlayerSetData", gsc_match_playerSetData, 0},
