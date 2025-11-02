@@ -25,6 +25,7 @@
 #include "error.h"
 #include "downloading.h"
 #include "demo.h"
+#include "vmix.h"
 #include "debug.h"
 #include "../shared/iwd.h"
 #include "../shared/common.h"
@@ -107,6 +108,7 @@ void hook_Com_Frame()
     iwd_frame();
     radar_frame();
     demo_frame();
+    vmix_frame();
 
     // Call the original function
     ASM_CALL(RETURN_VOID, 0x00434f70);
@@ -187,6 +189,7 @@ void hook_CL_Init() {
     drawing_init();
     radar_init();
     demo_init();
+    vmix_init();
     
     if (!DLL_HOTRELOAD) {
         ASM_CALL(RETURN_VOID, 0x00410a10);
@@ -299,6 +302,7 @@ bool hook_patch() {
     drawing_patch();
     radar_patch();
     demo_patch();
+    vmix_patch();
 
     // Patch server side
     common_patch();
