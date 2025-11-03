@@ -76,6 +76,7 @@ void demo_scheduleCloseAfterUpload() {
     Dvar_SetString(cl_demoAutoRecordName, ""); // Clear auto-record dvar to stop recording
 
     demo_isScheduledToCloseAfterUpload = true;
+    demo_checkNextDemoForUpload = true;
 }
 
 
@@ -301,10 +302,18 @@ void demo_frame() {
             bool demo_found = demo_getDemoForUpload(demo_filePath, sizeof(demo_filePath), demo_markerFilePath, sizeof(demo_markerFilePath), demo_uploadUrl, sizeof(demo_uploadUrl));
             if (!demo_found) break;
 
-            // Open the demo file for reading
+            // Check if the demo file exists and is readable before opening
+            if (access(demo_filePath, R_OK) != 0) {
+                Com_Printf("Demo file not found or not readable, removing marker file: '%s'\n", demo_markerFilePath);
+                if (remove(demo_markerFilePath) != 0) {
+                    Com_Error(ERR_FATAL, "Failed to delete marker file: %s\n", demo_markerFilePath);
+                }
+                continue;
+            }
+
             FILE* demoFile = fopen(demo_filePath, "rb");
             if (!demoFile) {
-                Com_Error(ERR_FATAL, "Failed to open demo file for upload: '%s'\n", demo_filePath);
+                Com_Error(ERR_FATAL, "Failed to open demo file: %s\n", demo_filePath);
                 continue;
             }
 
@@ -317,6 +326,9 @@ void demo_frame() {
                 // Remove the marker file since the demo file is invalid
                 Com_Printf("Demo file is empty or invalid, deleting marker file: %s\n", demo_markerFilePath);
                 fclose(demoFile);
+                if (remove(demo_markerFilePath) != 0) {
+                    Com_Error(ERR_FATAL, "Failed to delete marker file: %s\n", demo_markerFilePath);
+                }
                 continue;
             }
 
@@ -336,6 +348,15 @@ void demo_frame() {
             url[strcspn(url, "\r\n")] = 0;
             fclose(markerFile);
 
+            // If URL is not valid, remove marker file
+            if (!HttpClient::is_valid_url(url)) {
+                Com_Printf("Invalid upload URL in marker file, removing marker file: '%s'\n", demo_markerFilePath);
+                if (remove(demo_markerFilePath) != 0) {
+                    Com_Error(ERR_FATAL, "Failed to delete marker file: %s\n", demo_markerFilePath);
+                }
+                fclose(demoFile);
+                continue;
+            }
 
             demo_isUploading = true;
             if (demo_httpClient == nullptr)
