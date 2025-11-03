@@ -12,7 +12,7 @@ It focuses on fixing bugs and adding new features to the game.
 - This software may be terminated or withdrawn at any time
 
 # Version history
-- 2025-11-03 - 1.4.5.1-test.12 - *current testing*
+- 2025-11-03 - 1.4.5.1-test.13 - *current testing*
 - 2025-07-25 - 1.4.4.6 - **current**
 - 2025-07-12 - 1.4.4.5
 - 2025-07-04 - 1.4.4.4
