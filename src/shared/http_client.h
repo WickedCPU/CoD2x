@@ -112,7 +112,15 @@ class HttpClient {
                       Callback onDone,
                       ErrorCallback onError = nullptr,
                       int timeout_ms = 60000,
-                      int connect_timeout_ms = 10000) {
+                      int connect_timeout_ms = 10000)
+    {
+        // Validate URL to be correct
+        if (!is_valid_url(url)) {
+            if (onError)
+                onError("Invalid URL");
+            return;
+        }
+
         auto* ctx = new RequestContext{};
         ctx->url = url ? url : "";
         ctx->method = "GET";
@@ -153,6 +161,13 @@ class HttpClient {
                        int connect_timeout_ms = 10000,
                        size_t bandwidth_limit = 0) // 0 = unlimited, otherwise bytes/sec
     {
+        // Validate URL to be correct
+        if (!is_valid_url(url)) {
+            if (onError)
+                onError("Invalid URL");
+            return;
+        }
+
         auto* ctx = new RequestContext{};
         ctx->url = url ? url : "";
         ctx->method = "POST";
@@ -236,6 +251,14 @@ class HttpClient {
      * If the connection cannot be established, the onError callback is invoked with an error message.
      */
     void request(const char* method, const char* url, const char* data, size_t data_length, const char* headers, Callback onDone, ErrorCallback onError, int timeout_ms = 60000, int connect_timeout_ms = 5000) {
+        
+        // Validate URL to be correct
+        if (!is_valid_url(url)) {
+            if (onError)
+                onError("Invalid URL");
+            return;
+        }
+        
         // Own all strings inside the context to avoid dangling pointers
         auto* ctx = new RequestContext{};
         ctx->url = url ? url : "";
@@ -274,6 +297,44 @@ class HttpClient {
 
     static int url_decode(const char* src, size_t src_len, char* dst, size_t dst_len, int is_form_url_encoded) {
         return mg_url_decode(src, src_len, dst, dst_len, is_form_url_encoded);
+    }
+
+    static bool is_valid_url(const char *url) {
+        if (!url || *url == '\0')
+            return false;
+
+        const char *p = url;
+
+        // Scheme: must start with a letter
+        if (!isalpha((unsigned char)*p))
+            return false;
+        p++;
+
+        // Valid scheme chars: letters, digits, '+', '-', '.'
+        while (*p && (isalnum((unsigned char)*p) || *p == '+' || *p == '-' || *p == '.'))
+            p++;
+
+        // Must be followed by "://"
+        if (strncmp(p, "://", 3) != 0)
+            return false;
+        p += 3;
+
+        // Must have something after "://"
+        if (*p == '\0')
+            return false;
+
+        // Check remaining characters for invalid ones
+        // Reject control chars, spaces, quotes, backticks, <, >, backslashes
+        while (*p) {
+            unsigned char c = (unsigned char)*p;
+            if (c <= 32 || c > 126) // Ignore non-printable characters
+                return false;
+            if (c == ' ' || c == '"' || c == '`' || c == '<' || c == '>' || c == '\\') // Invalid URL characters
+                return false;
+            p++;
+        }
+
+        return true;
     }
 
   private:
