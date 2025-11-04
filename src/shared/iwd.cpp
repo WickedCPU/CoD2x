@@ -395,8 +395,19 @@ qboolean FS_iwIwd(char *iwd, const char *base, int cod2x_version)
     int numCoD2xIwds = 0;
     switch (cod2x_version)
     {
+        case 0: 
+        case 1: 
+        case 2: 
+        case 3: 
+        case 4: 
+            numCoD2xIwds = 0; 
+            break;
+
         // Since 1.4.5.1
-        case 5: numCoD2xIwds = 1; break;
+        case 5: 
+        default:
+            numCoD2xIwds = 1; 
+            break;
     }
     for ( i = 0; i < numCoD2xIwds; ++i )
     {

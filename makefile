@@ -25,15 +25,15 @@ VERSION_MINOR = 4
 # Should be increased only if the changed functionalities that affect both server and client
 # Newer client can connect older server
 # Older client can not connect newer server
-VERSION_PROTOCOL = 5
+VERSION_PROTOCOL = 6
 
 # CoD2x patch version
 # Should be increased when new version is released and the changes are backward compatible
 VERSION_PATCH = 1
 
 # CoD2x test version (e.g. -test.1)
-VERSION_TEST = -test.13
-VERSION_IS_TEST = 1
+VERSION_TEST =
+VERSION_IS_TEST = 0
 
 # Full version string
 # Example "1.4.1.1"  or  "1.4.1.1-test.1"
