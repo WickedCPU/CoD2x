@@ -4,7 +4,7 @@
 #include <cstddef>
 
 void demo_scheduleCloseAfterUpload();
-bool demo_getDemoForUpload(char* demoFileNameBuffer = nullptr, size_t bufferSize = 0, char* demoMarkerFileBuffer = nullptr, size_t demoMarkerFileBufferSize = 0, char* urlBuffer = nullptr, size_t urlBufferSize = 0);
+bool demo_getDemoForUpload(char* demoFileNameBuffer = nullptr, size_t bufferSize = 0, char* demoMarkerFileBuffer = nullptr, size_t demoMarkerFileBufferSize = 0);
 
 void demo_drawing();
 void demo_unload();

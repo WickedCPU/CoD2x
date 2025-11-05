@@ -420,7 +420,7 @@ class HttpClient {
 
 
             // Update upload bandwidth statistics
-            if (ctx->isUpload && !ctx->upload_done) {
+            if (ctx->isUpload && !ctx->upload_done && !ctx->error_occurred) {
 
                 // Initialize bandwidth control timers/counters
                 if (ctx->upload_speed_start_ms == 0) {

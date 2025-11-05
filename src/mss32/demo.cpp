@@ -18,10 +18,13 @@
 
 dvar_t*        cl_demoAutoRecordName;
 dvar_t*        cl_demoAutoRecordUploadUrl;
+dvar_t*        cl_demoAutoRecordUploadTimeout;
 bool           demo_isUploading = false;
 bool           demo_checkNextDemoForUpload = false;
 HttpClient*    demo_httpClient = nullptr;
 int            demo_lastClientState = -1;
+uint64_t       demo_uploadingStartTime = 0;
+uint64_t       demo_uploadingLastChangeTime = 0;
 size_t         demo_uploadingTotalBytes = 0;
 size_t         demo_uploadingUploadedBytes = 0;
 size_t         demo_uploadingBytesPerSecond = 0;
@@ -32,7 +35,6 @@ uint64_t       demo_uploadingHideAtTime = 0;
 bool           demo_isScheduledToCloseAfterUpload = false;
 char           demo_filePath[MAX_OSPATH];
 char           demo_markerFilePath[MAX_OSPATH];
-char           demo_uploadUrl[1024];
 std::unordered_set<std::string> demo_failedUploadMarkerPaths;
 
 
@@ -80,10 +82,19 @@ void demo_scheduleCloseAfterUpload() {
 }
 
 
-bool demo_getDemoForUpload(char* demoFileNameBuffer, size_t bufferSize, char* demoMarkerFileBuffer, size_t demoMarkerFileBufferSize, char* urlBuffer, size_t urlBufferSize) {
+bool demo_getDemoForUpload(char* demoFileNameBuffer, size_t bufferSize, char* demoMarkerFileBuffer, size_t demoMarkerFileBufferSize) {
     // Check for demo upload marker files
     char demoDir[MAX_OSPATH];
     FS_BuildOSPath(demoDir, "demos", fs_gamedir, fs_homePath->value.string);
+
+    // Normalize path separators
+    for (char* p = demoDir; *p; ++p) {
+        if (*p == '/') {
+            *p = '\\';
+        }
+    }
+
+    Com_Printf("Checking for demos to upload in directory: '%s'...\n", demoDir);
 
     DIR* dir;
     struct dirent* entry;
@@ -97,16 +108,16 @@ bool demo_getDemoForUpload(char* demoFileNameBuffer, size_t bufferSize, char* de
     while ((entry = readdir(dir)) != NULL) {
         struct stat entry_stat;
         char entry_path[MAX_OSPATH];
-        if (snprintf(entry_path, sizeof(entry_path), "%s/%s", demoDir, entry->d_name) >= (int)sizeof(entry_path)) {
-            Com_Printf("Path too long, skipping: %s/%s\n", demoDir, entry->d_name);
+        if (snprintf(entry_path, sizeof(entry_path), "%s\\%s", demoDir, entry->d_name) >= (int)sizeof(entry_path)) {
+            Com_Printf("Path too long, skipping: %s\\%s\n", demoDir, entry->d_name);
             continue;
         }
         if (stat(entry_path, &entry_stat) == 0 && !S_ISDIR(entry_stat.st_mode)) {
             const char* ext = strrchr(entry->d_name, '.');
             if (ext && strcmp(ext, ".upload") == 0) {
                 char filePath[MAX_OSPATH];
-                if (snprintf(filePath, sizeof(filePath), "%s/%s", demoDir, entry->d_name) >= (int)sizeof(filePath)) {
-                    Com_Printf("File path too long, skipping: %s/%s\n", demoDir, entry->d_name);
+                if (snprintf(filePath, sizeof(filePath), "%s\\%s", demoDir, entry->d_name) >= (int)sizeof(filePath)) {
+                    Com_Printf("File path too long, skipping: %s\\%s\n", demoDir, entry->d_name);
                     continue;
                 }
 
@@ -116,7 +127,7 @@ bool demo_getDemoForUpload(char* demoFileNameBuffer, size_t bufferSize, char* de
                 }
 
                 // Process the .upload file
-                Com_Printf("Found upload marker file: %s\n", filePath);
+                Com_Printf("Found demo upload marker file: '%s'\n", filePath);
 
                 if (demoMarkerFileBuffer && demoMarkerFileBufferSize > 0) {
                     strncpy(demoMarkerFileBuffer, filePath, demoMarkerFileBufferSize - 1);
@@ -136,18 +147,7 @@ bool demo_getDemoForUpload(char* demoFileNameBuffer, size_t bufferSize, char* de
                     demoFileNameBuffer[bufferSize - 1] = '\0';  // Ensure null-termination
                 }
 
-                // Read the file contents to get the URL
-                if (urlBuffer && urlBufferSize > 0) {
-                    FILE* uploadFile = fopen(filePath, "r");
-                    if (uploadFile) {
-                        size_t bytesRead = fread(urlBuffer, 1, urlBufferSize - 1, uploadFile);
-                        urlBuffer[bytesRead] = '\0'; // Null-terminate
-                        fclose(uploadFile);
-                    } else {
-                        Com_Printf("Failed to open upload marker file for reading: %s\n", filePath);
-                        urlBuffer[0] = '\0'; // Ensure empty URL on failure
-                    }
-                }
+                Com_Printf("Demo file for upload: '%s'\n", demoFileNameBuffer);
                 
                 closedir(dir);
 
@@ -155,6 +155,9 @@ bool demo_getDemoForUpload(char* demoFileNameBuffer, size_t bufferSize, char* de
             }
         }
     }
+
+    Com_Printf("No demo upload marker files found.\n");
+
     return false;
 }
 
@@ -173,11 +176,8 @@ void demo_drawing() {
 
     if ((demo_isUploading || ticks_ms() < demo_uploadingHideAtTime) && (clientState == CLIENT_STATE_DISCONNECTED || clientState == CLIENT_STATE_ACTIVE)) {
 
-        // Get file name without path and extension. Separators are both "/" and "\"
-        const char* fileName = strrchr(demo_filePath, '/');
-        if (!fileName) {
-            fileName = strrchr(demo_filePath, '\\');
-        }
+        // Get file name without path and extension.
+        const char* fileName = strrchr(demo_filePath, '\\');
         fileName = fileName ? fileName + 1 : demo_filePath;
 
 
@@ -299,7 +299,7 @@ void demo_frame() {
         demo_checkNextDemoForUpload = false;
 
         do {
-            bool demo_found = demo_getDemoForUpload(demo_filePath, sizeof(demo_filePath), demo_markerFilePath, sizeof(demo_markerFilePath), demo_uploadUrl, sizeof(demo_uploadUrl));
+            bool demo_found = demo_getDemoForUpload(demo_filePath, sizeof(demo_filePath), demo_markerFilePath, sizeof(demo_markerFilePath));
             if (!demo_found) break;
 
             // Check if the demo file exists and is readable before opening
@@ -362,6 +362,8 @@ void demo_frame() {
             if (demo_httpClient == nullptr)
                 demo_httpClient = new HttpClient();
 
+            demo_uploadingStartTime = ticks_ms();
+            demo_uploadingLastChangeTime = ticks_ms();
             demo_uploadingUploadedBytes = 0;
             demo_uploadingTotalBytes = fileSize;
             demo_uploadingBytesPerSecond = 0;
@@ -369,18 +371,19 @@ void demo_frame() {
             demo_uploadingDoneSuccessfully = false;
 
             // Get demo file name. Separators are both "/" and "\"
-            const char* fileName = strrchr(demo_filePath, '/');
-            if (!fileName) {
-                fileName = strrchr(demo_filePath, '\\');
-            }
+            const char* fileName = strrchr(demo_filePath, '\\');
             fileName++;
+
+            Com_Printf("Starting upload of demo '%s' to URL: '%s'\n", fileName, url);
 
             demo_httpClient->upload_chunks(
                 url,
                 fileSize,
                 [demoFile](char* buf, size_t maxLen, size_t offset) -> size_t {
-                    if (fseek(demoFile, (long)offset, SEEK_SET) != 0) return 0;
-                    return fread(buf, 1, maxLen, demoFile);
+                    if (fseek(demoFile, (long)offset, SEEK_SET) != 0) 
+                        return 0;
+                    size_t bytesRead = fread(buf, 1, maxLen, demoFile);
+                    return bytesRead;
                 },
                 [](size_t uploaded, size_t total, size_t bytes_per_second) {
                     //double percentage = total > 0 ? (double)uploaded / total * 100.0 : 0.0;
@@ -388,12 +391,14 @@ void demo_frame() {
                     demo_uploadingUploadedBytes = uploaded;
                     demo_uploadingTotalBytes = total;
                     demo_uploadingBytesPerSecond = bytes_per_second;
+                    demo_uploadingLastChangeTime = ticks_ms();
                 },
                 [demoFile](const HttpClient::Response& response) {
                     Com_Printf("Demo upload completed! Status: %d\n", response.status);
                     if (response.status == 200 || response.status == 201 || response.status == 409) { // 409 = Conflict (demo already exists)
-                        Com_Printf("Demo upload successful with status: %d!\n", response.status);
+                        Com_Printf("^2Demo upload successful with status: %d!\n", response.status);
                         // Delete the .upload marker file
+                        Com_Printf("Deleting marker file: %s\n", demo_markerFilePath);
                         if (DEBUG) {
                             if (rename(demo_markerFilePath, va("%s.old", demo_markerFilePath)) != 0) {
                                 Com_Error(ERR_FATAL, "Failed to rename marker file: %s\n", demo_markerFilePath);
@@ -403,11 +408,15 @@ void demo_frame() {
                                 Com_Error(ERR_FATAL, "Failed to delete marker file: %s\n", demo_markerFilePath);
                             }
                         }
+                        // Verify if file exists after deletion
+                        if (access(demo_markerFilePath, F_OK) != -1) {
+                            Com_Error(ERR_FATAL, "Marker file still exists after deletion: %s\n", demo_markerFilePath);
+                        }
                         demo_uploadingHideAtTime = ticks_ms() + 2000; // Hide after 2 seconds
                         demo_uploadingDoneSuccessfully = true;
 
                     } else {
-                        Com_Printf("Demo upload failed with status: %d\n", response.status);
+                        Com_Printf("^1Demo upload failed with status: %d\n", response.status);
                         demo_uploadingErrorMessage = "Error: " + std::to_string(response.status);
                         demo_uploadingHideAtTime = ticks_ms() + 3000; // Hide after 3 seconds
                         demo_uploadingErrorCount++;
@@ -421,7 +430,7 @@ void demo_frame() {
                     demo_checkNextDemoForUpload = true;
                 },
                 [demoFile](const std::string& error) {
-                    Com_Printf("Demo upload error: %s\n", error.c_str());
+                    Com_Printf("^1Demo upload error: %s\n", error.c_str());
                     demo_uploadingErrorMessage = "Error: " + error;
                     demo_uploadingHideAtTime = ticks_ms() + 3000; // Hide after 3 seconds
                     demo_uploadingErrorCount++;
@@ -433,8 +442,8 @@ void demo_frame() {
                     demo_isUploading = false;
                     demo_checkNextDemoForUpload = true;
                 },
-                60000,
-                2000,
+                cl_demoAutoRecordUploadTimeout->value.integer * 1000,
+                3000,
                 5 * 1024 * 1024 // 5MB/s bandwidth limit
             );
 
@@ -444,6 +453,7 @@ void demo_frame() {
 
     // If we disconnected, clear cvars
     if (clientStateChanged && clientState == CLIENT_STATE_DISCONNECTED) {
+        Com_Printf("Client disconnected, clearing demo auto-record and upload URL dvars.\n");
         Dvar_SetString(cl_demoAutoRecordName, ""); // Clear auto-record dvar to stop recording
         Dvar_SetString(cl_demoAutoRecordUploadUrl, ""); // Clear upload URL dvar
     }
@@ -469,10 +479,11 @@ void demo_unload() {
 void demo_init() {
     cl_demoAutoRecordName = Dvar_RegisterString("cl_demoAutoRecordName", "", (dvarFlags_e)(DVAR_CHANGEABLE_RESET | DEBUG_RELEASE(DVAR_NOFLAG, DVAR_NOWRITE)));
     cl_demoAutoRecordUploadUrl = Dvar_RegisterString("cl_demoAutoRecordUploadUrl", "", (dvarFlags_e)(DVAR_CHANGEABLE_RESET | DEBUG_RELEASE(DVAR_NOFLAG, DVAR_NOWRITE)));
+    cl_demoAutoRecordUploadTimeout = Dvar_RegisterInt("cl_demoAutoRecordUploadTimeout", 60, 10, 600, (dvarFlags_e)(DVAR_CHANGEABLE_RESET | DVAR_ARCHIVE));
 
     #if DEBUG && 0
     //Dvar_SetString(cl_demoAutoRecordUploadUrl, "http://localhost:8080/api/match/12345/demo-upload/");
-    //Dvar_SetString(cl_demoAutoRecordUploadUrl, "http://master.cod2x.me/api/match/12345/demo-upload/");
+    //Dvar_SetString(cl_demoAutoRecordUploadUrl, "https://master.cod2x.me/api/match/12345/demo-upload/");
     #endif
 }
 
