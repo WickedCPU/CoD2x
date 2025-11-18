@@ -30,6 +30,9 @@ dvar_t*		sv_master[MAX_MASTER_SERVERS];
 netaddr_s	masterServerAddr[MAX_MASTER_SERVERS] = { {}, {}, {} };
 dvar_t*		sv_cracked;
 dvar_t*		sv_rateLimiter;
+dvar_t*     sv_rateLimiterRequestCount; // exposed dvar reflecting current request count in last second
+dvar_t*     sv_rateLimiterUniqueIPCount; // exposed dvar reflecting current unique IP count in last second
+long		server_rateLimiter_lastCvarUpdateTime = 0;
 dvar_t*		showpacketstrings;
 dvar_t*		sv_playerBroadcastLimit;
 int 		nextIPTime = 0;
@@ -49,7 +52,9 @@ extern dvar_t* g_cod2x;
 
 static leakyBucket_t buckets[ MAX_BUCKETS ];
 static leakyBucket_t* bucketHashes[ MAX_HASHES ];
-leakyBucket_t outboundLeakyBucket;
+leakyBucket_t outboundLeakyBucket = {};
+leakyBucket_t outboundLeakyBucketRcon = {};
+leakyBucket_t outboundLeakyBucketDisconnect = {};
 
 static long SVC_HashForAddress( netaddr_s address )
 {
@@ -178,6 +183,55 @@ bool SVC_RateLimitAddress( netaddr_s from, int burst, int period )
 	leakyBucket_t *bucket = SVC_BucketForAddress( from, burst, period );
 
 	return SVC_RateLimit( bucket, burst, period );
+}
+
+
+// Update exposed dvars with rate limiter statistics.
+// Reuses existing buckets array. Does not create any new IP arrays.
+static void SVC_UpdateRateLimiterStats()
+{
+	if (!sv_rateLimiter->value.boolean)
+		return;
+
+	uint64_t now = ticks_ms();
+	int uniqueIPs = 0;
+	int requestCount = 0;
+
+	// Ignore updates unless at least 1 second has passed since last update
+	if (now - server_rateLimiter_lastCvarUpdateTime < 1000)
+		return;
+
+	server_rateLimiter_lastCvarUpdateTime = now;
+
+	for (int i = 0; i < MAX_BUCKETS; i++)
+	{
+		leakyBucket_t *b = &buckets[i];
+
+		if (b->lastTime <= 0)
+			continue;
+
+		// Consider buckets with activity in the last 1000 ms (1 second)
+		if ((now - b->lastTime) <= 1000)
+		{
+			uniqueIPs++;
+
+			// bucket->burst is incremented for each recent request and decays
+			// over time in SVC_RateLimit; summing bursts for active buckets
+			// gives an approximation of recent request count without creating
+			// separate arrays for IP tracking.
+			requestCount += b->burst;
+		}
+	}
+
+	// Ensure non-negative
+	if (requestCount < 0) requestCount = 0;
+	if (uniqueIPs < 0) uniqueIPs = 0;
+
+	if (requestCount != sv_rateLimiterRequestCount->value.integer)
+		Dvar_SetInt(sv_rateLimiterRequestCount, requestCount);
+
+	if (uniqueIPs != sv_rateLimiterUniqueIPCount->value.integer)
+		Dvar_SetInt(sv_rateLimiterUniqueIPCount, uniqueIPs);
 }
 
 
@@ -850,6 +904,23 @@ void server_get_address_info(char* buffer, size_t bufferSize, netaddr_s addr) {
 }
 
 
+bool server_isRateLimitOk(leakyBucket_t* bucket, netaddr_s from, const char* action, int addrBurst, int addrPeriod, int overallBurst, int overallPeriod)
+{
+	if (sv_rateLimiter->value.boolean == false) {
+		return true;
+	}
+	if (SVC_RateLimitAddress(from, addrBurst, addrPeriod)) {
+		Com_DPrintf("%s: rate limit from %s exceeded, dropping request\n", action, NET_AdrToString(from));
+		return false;
+	}
+	if (SVC_RateLimit(bucket, overallBurst, overallPeriod)) {
+		Com_DPrintf("%s: overall rate limit exceeded, dropping request\n", action);
+		return false;
+	}
+	return true;
+};
+
+
 void SV_ConnectionlessPacket( netaddr_s from, msg_t *msg )
 {
 	char* s;
@@ -879,43 +950,23 @@ void SV_ConnectionlessPacket( netaddr_s from, msg_t *msg )
 	// CoD2x: End
 
 
-	// CoD2x: Rate limiting function
-	auto isRateLimitOk = [](leakyBucket_t* bucket, netaddr_s from, const char* action, int addrBurst, int addrPeriod, int overallBurst, int overallPeriod) -> bool 
-	{
-		if (sv_rateLimiter->value.boolean == false) {
-			return true;
-		}
-		if (SVC_RateLimitAddress(from, addrBurst, addrPeriod)) {
-			Com_DPrintf("%s: rate limit from %s exceeded, dropping request\n", action, NET_AdrToString(from));
-			return false;
-		}
-		extern leakyBucket_t outboundLeakyBucket;
-		if (SVC_RateLimit(&outboundLeakyBucket, overallBurst, overallPeriod)) {
-			Com_DPrintf("%s: overall rate limit exceeded, dropping request\n", action);
-			return false;
-		}
-		return true;
-	};
-	// CoD2x: End
-
-
 	if (Q_stricmp( c, "v") == 0)
 	{
 		SV_VoicePacket( from, msg );
 	}
 	else if (Q_stricmp( c,"getstatus") == 0)
 	{
-		if (isRateLimitOk(&outboundLeakyBucket, from, "SV_Status", 10, 1000, 10, 100))
+		if (server_isRateLimitOk(&outboundLeakyBucket, from, "SV_Status", 10, 1000, 10, 100))
 			SVC_Status( from  );
 	}
 	else if (Q_stricmp( c,"getinfo") == 0)
 	{
-		if (isRateLimitOk(&outboundLeakyBucket, from, "SV_Info", 10, 1000, 10, 100))
+		if (server_isRateLimitOk(&outboundLeakyBucket, from, "SV_Info", 10, 1000, 10, 100))
 			SVC_Info( from );
 	}
 	else if (Q_stricmp( c,"getchallenge") == 0)
 	{
-		if (isRateLimitOk(&outboundLeakyBucket, from, "SV_GetChallenge", 10, 1000, 10, 100))
+		if (server_isRateLimitOk(&outboundLeakyBucket, from, "SV_GetChallenge", 10, 1000, 10, 100))
 			SV_GetChallenge( from );
 	}
 	else if (Q_stricmp( c,"connect") == 0)
@@ -928,7 +979,7 @@ void SV_ConnectionlessPacket( netaddr_s from, msg_t *msg )
 	}
 	else if (Q_stricmp( c, "rcon") == 0)
 	{
-		if (isRateLimitOk(&outboundLeakyBucket, from, "SVC_RemoteCommand", 10, 1000, 10, 1000))
+		if (server_isRateLimitOk(&outboundLeakyBucketRcon, from, "SVC_RemoteCommand", 10, 1000, 10, 1000))
 			SVC_RemoteCommand( from );
 	}
 	// CoD2x: Auto-Updater
@@ -961,6 +1012,24 @@ void SV_ConnectionlessPacket( netaddr_s from, msg_t *msg )
 }
 
 
+
+
+// Limit sending disconnect packets to corrupted received packets
+int NET_OutOfBandPrint_SV_PacketEvent(netsrc_e sender, struct netaddr_s addr, const char* msg) {
+
+	if (!server_isRateLimitOk(&outboundLeakyBucketDisconnect, addr, "SV_PacketEvent::disconnect", 2, 1000, 64, 1000)) { // 2 packets per second for IP, 64 packets per second overall
+		return 0;
+	}
+
+	return NET_OutOfBandPrint(sender, addr, msg);
+}
+
+// Send UDP packet to a server or client. Sender is NS_SERVER or NS_CLIENT
+int NET_OutOfBandPrint_SV_PacketEvent_Win32(netsrc_e sender, struct netaddr_s addr) {
+	const char* msg;
+	ASM( movr, msg, "eax" );
+	return NET_OutOfBandPrint_SV_PacketEvent(sender, addr, msg);
+}
 
 
 
@@ -1170,6 +1239,9 @@ void G_RunFrame(int time) {
 
 	server_ignoreMapChangeThisFrame = false;
 
+	// Update rate limiter statistics (request count and unique IPs in last second)
+	SVC_UpdateRateLimiterStats();
+
 	if (sv_playerBroadcastLimit->value.integer > 0) {
 
 		// Count number of players
@@ -1222,6 +1294,8 @@ void server_init()
 	sv_cracked = Dvar_RegisterBool("sv_cracked", false, (dvarFlags_e)(DVAR_CHANGEABLE_RESET));
 
 	sv_rateLimiter = Dvar_RegisterBool("sv_rateLimiter", true, (dvarFlags_e)(DVAR_CHANGEABLE_RESET));
+	sv_rateLimiterRequestCount = Dvar_RegisterInt("sv_rateLimiterRequestCount", 0, 0, INT_MAX, (dvarFlags_e)(DVAR_ROM));
+	sv_rateLimiterUniqueIPCount = Dvar_RegisterInt("sv_rateLimiterUniqueIPCount", 0, 0, INT_MAX, (dvarFlags_e)(DVAR_ROM));
 
 	// If the original binary has been cracked by changing the authorize server URL, set sv_cracked to true to maintain the same behavior
 	if (strncmp(originalAuthorizeServerUrl, SERVER_ACTIVISION_AUTHORIZE_URI, 26) != 0) {
@@ -1259,6 +1333,9 @@ void server_patch()
 
     // Hook the SV_ConnectionlessPacket function
     patch_call(ADDR(0x0045bbc2, 0x08096126), (unsigned int)SV_ConnectionlessPacket);
+
+	// Hook SV_PacketEvent in Com_EventLoop
+	patch_call(ADDR(0x0045bd06, 0x080963bd), (unsigned int)WL(NET_OutOfBandPrint_SV_PacketEvent_Win32, NET_OutOfBandPrint_SV_PacketEvent));
 
 	// Hook SV_MasterHeartbeat
 	patch_call(ADDR(0x0045c8b2, 0x08096e03), (unsigned int)SV_MasterHeartbeat); // "COD-2"
