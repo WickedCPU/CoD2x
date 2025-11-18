@@ -237,6 +237,14 @@ void demo_frame() {
     bool clientStateChanged = (demo_lastClientState != clientState);
     demo_lastClientState = clientState;
 
+    // Ignore cvar change while replaying demo
+    if (cl_demoAutoRecordName->modified && demo_isPlaying) {
+        Dvar_SetString(cl_demoAutoRecordName, "");
+        Dvar_SetString(cl_demoAutoRecordUploadUrl, "");
+        cl_demoAutoRecordName->modified = false;
+        cl_demoAutoRecordUploadUrl->modified = false;
+    }
+
     // Mod filled name of demo to auto record
     if (cl_demoAutoRecordName->modified) {
         cl_demoAutoRecordName->modified = false;
